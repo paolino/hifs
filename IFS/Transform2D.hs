@@ -11,18 +11,18 @@
 --
 -- Description
 --
---	  Some geometry operations used by the IFS
+--	  Some geometry operations and instances of the IFS
 --
 -----------------------------------------------------------------------------
 
 module IFS.Transform2D (
    -- * Types
    -- ** Matrix and Vector
-   M
+   L
  , V(..)
    -- ** Non linear transformations
  , D (..)
- , DL(..)
+ , DL (..)
   -- ** Transforming and running
  , module IFS
    -- * Creating linear transformations
@@ -31,7 +31,6 @@ module IFS.Transform2D (
  , scaling
  , translation
   -- * Non linear transformations (alpheccar contribution)
- , v0
  , v1
  , v2
  , v3
@@ -58,16 +57,16 @@ newtype V a = V {unV :: (a,a)} deriving(Eq,Show,Functor,Ord)
 newtype D a = D {unD :: V a -> V a} 
 
 -- | Affine transform on 2x2 space
-newtype M a = M (a,a,a,a,a,a) deriving(Eq,Show)
+newtype L a = L (a,a,a,a,a,a) deriving(Eq,Show)
 
--- | A non linear transformation with a pure non linear part and an affine one
-newtype DL a = DL {unDL ::(D a,M a) }
+-- | A direct transformation with an affine one
+newtype DL a = DL {unDL ::(D a,L a) }
 
 
-instance Num a => Transform (M a) (V a) where
-	M (a,b,c,d,e,f) ° V (x,y) = V (a*x+b*y + e,c*x+d*y + f)
-instance Num a => Transform (M a) (M a) where
-        M (a,b,c,d,e,f) ° M (a',b',c',d',e',f') = M (a*a' + b*c',a*b' + b*d',c*a' + d*c',c*b' + d*d',a*e' + b*f' + e,c*e' + d*f' + f)
+instance Num a => Transform (L a) (V a) where
+	L (a,b,c,d,e,f) ° V (x,y) = V (a*x+b*y + e,c*x+d*y + f)
+instance Num a => Transform (L a) (L a) where
+        L (a,b,c,d,e,f) ° L (a',b',c',d',e',f') = L (a*a' + b*c',a*b' + b*d',c*a' + d*c',c*b' + d*d',a*e' + b*f' + e,c*e' + d*f' + f)
 
 instance Transform (D a) (V a)  where
 	D f ° v = f v
@@ -76,10 +75,13 @@ instance Transform (D a) (D a)  where
 
 instance Num a => Transform (DL a) (V a) where
 	(°) (DL (f,m)) v = f ° (m ° v)	
+
 instance Transform (D a) (DL a) where
 	f ° (DL (g,m)) = DL (f ° g,m)
-instance Num a => Transform (M a) (DL a)  where
+
+instance Num a => Transform (L a) (DL a)  where
 	f ° (DL (g,m)) = DL (g, f ° m)
+
 instance Num a => Transform (DL a) (DL a)  where
 	(DL (f,m')) ° (DL (g,m)) = DL (f ° g, m' ° m)
 
@@ -96,13 +98,9 @@ linear :: Num a => a -- ^ a
        -> a -- ^ d 
        -> a -- ^ e 
        -> a -- ^ f
-       -> M a
-linear a b c d e f = M (a,b,c,d,e,f)
+       -> L a
+linear a b c d e f = L (a,b,c,d,e,f)
 
--- | Linear
-v0 ::D Double
-v0 = D f where 
-	f (V(x,y))  = V(x,y)
 
 -- | Sinusoidal
 v1 :: D Double
@@ -196,12 +194,12 @@ v12 = D f where
                 theta = atan(x/y)
                 r = sqrt(x*x + y*y)
 
-rotation :: Double -> M Double
-rotation t = M (cos (t*pi/180),sin (t*pi/180),-sin (t*pi/180),cos (t*pi/180),0,0)
+rotation :: Double -> L Double
+rotation t = L (cos (t*pi/180),sin (t*pi/180),-sin (t*pi/180),cos (t*pi/180),0,0)
 
-scaling :: Double -> Double -> M Double
-scaling sx sy = M(sx,0,0,sy,0,0)
+scaling :: Double -> Double -> L Double
+scaling sx sy = L (sx,0,0,sy,0,0)
 
-translation :: Double -> Double -> M Double
-translation tx ty = M(1,0,0,1,tx,ty)
+translation :: Double -> Double -> L Double
+translation tx ty = L (1,0,0,1,tx,ty)
 
