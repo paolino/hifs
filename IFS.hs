@@ -1,5 +1,5 @@
 
-{-# LANGUAGE GADTs, FlexibleInstances, FlexibleContexts, ScopedTypeVariables, MultiParamTypeClasses,EmptyDataDecls #-}
+{-# LANGUAGE BangPatterns, GADTs, FlexibleInstances, FlexibleContexts, ScopedTypeVariables, MultiParamTypeClasses,EmptyDataDecls #-}
 
 ---------------------------------------------------------------------------
 -- |
@@ -24,6 +24,7 @@ module IFS (
         , UnNormalized
         -- * IFS creation functions
         , ifunc
+        , wfuncs
         -- * probability change
         , (?)
         -- * IFS normalization
@@ -37,6 +38,7 @@ module IFS (
         , pointsIO
         , module Data.Monoid
         , module System.Random
+        
 
  )
 
@@ -45,6 +47,8 @@ import Data.Monoid (Monoid (..))
 import Data.List (mapAccumL)
 import Control.Arrow (first, second)
 import System.Random
+import Control.Parallel.Strategies
+import Control.DeepSeq
 
 -- | tag for normalized ifs
 data Normalized
@@ -95,10 +99,13 @@ p ? (Normalized la) = UnNormalized $ map (change p) la
 ifunc :: a -> IFS Normalized a
 ifunc x = Normalized [(x,1)]
 
+-- | create an unnormalized ifs from a list of weighted values 
+wfuncs :: [(a,Double)] -> IFS UnNormalized a
+wfuncs = UnNormalized
+
 -- | select an element of the ifs given a number between 0 and 1
 pick :: IFS Normalized a -> Double -> a
 pick (Normalized ls) q = fst . head . dropWhile ((> 0) . snd) . snd $ mapAccumL (\q (x,p) -> (q - p, (x,q - p))) q $ ls
-
 
 -- | a class for transformations
 class Transform b c where
@@ -106,15 +113,17 @@ class Transform b c where
 
 instance Transform (a -> a) a where
         f ° x = f x
+
 -- | sample driven point creation from a starting point and an ifs 
 points  :: Transform b c 
         => IFS Normalized b     -- ^ generating ifs
         -> c                    -- ^ first point
         -> [Double]             -- ^ stream of random samples on the (0,1) interval
         -> [c]                  -- ^ point stream
-points ifs x ds = scanl (flip (°)) x $ map (pick ifs) ds
+points ifs x = scanl (\x d -> pick ifs d ° x) x
+-- scanl' f x (d:ds) = let y = f x d in y : scanl' f y ds
 
-pointsIO :: Transform b c 
+pointsIO :: Transform b c
         => IFS Normalized b     -- ^ generating ifs
         -> c                    -- ^ first point
         -> IO [c]                  -- ^ point stream
